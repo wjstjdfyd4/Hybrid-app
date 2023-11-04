@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        canvas {
+            border: 1px solid #000;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="myCanvas" width="800" height="600"></canvas>
+
+    <script>
+        var canvas = document.getElementById("myCanvas");
+        var ctx = canvas.getContext("2d");
+        var radius = 20;
+        var moveSpeed = 0.05;
+        var maxMoveSpeed = 2;
+        var springFactor = 0.005;
+        var centerX = canvas.width / 2;
+        var centerY = canvas.height / 2;
+        var tail = [];
+        var tailLength = 3; // 초기 몸통 개수
+        var isClicking = false;
+        var targetX = centerX;
+        var targetY = centerY;
+        var startTime = Date.now(); // 게임 시작 시간
+        var obstacles = []; // 장애물 배열
+        var obstacleTypes = ["triangle", "rectangle", "circle"]; // 장애물 타입
+
+        // 뱀 객체
+        var snake = {
+            x: centerX,
+            y: centerY,
+            body: [],
+            length: 3, // 초기 몸통 개수
+        };
+
+        // 먹이 생성 함수
+        function createFood() {
+            var food = {
+                x: Math.floor(Math.random() * (canvas.width - radius * 2) + radius),
+                y: Math.floor(Math.random() * (canvas.height - radius * 2) + radius),
+                color: "red", // 먹이의 색상
+            };
+            return food;
+        }
+
+        // 초기 먹이 생성
+        var food = createFood();
+
+        // 장애물 생성 함수
+        function createObstacle() {
+            var type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)]; // 랜덤한 장애물 타입 선택
+            var obstacle = {
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 10 + 10, // 장애물의 크기는 10 ~ 20 사이의 랜덤 값
+                type: type, // 장애물 타입
+                color: "purple", // 장애물의 색상
+                dx: Math.random() * 2 - 1, // x축 이동 속도
+                dy: Math.random() * 2 - 1, // y축 이동 속도
+                angle: 0, // 회전 각도
+                da: Math.random() * 0.1 - 0.05, // 회전 속도
+            };
+            return obstacle;
+        }
+
+        // 초기 장애물 생성
+        for (var i = 0; i < 5; i++) {
+            obstacles.push(createObstacle());
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 게임 진행 시간 계산
+            var elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+
+            // 맨위에 시간(초)과 뱀 길이(점수)를 출력
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "black";
+            ctx.fillText("Time: " + elapsedSeconds + "s", 10, 30);
+            ctx.fillText("Score: " + tailLength, 10, 60);
+
+            var dx = targetX - centerX;
+            var dy = targetY - centerY;
+
+            // 이동 벡터를 정규화합니다.
+            var length = Math.sqrt(dx * dx + dy * dy);
+            if (length !== 0) {
+                var currentMoveSpeed = isClicking ? maxMoveSpeed : moveSpeed;
+                dx = (dx / length) * currentMoveSpeed;
+                dy = (dy / length) * currentMoveSpeed;
+            }
+
+            // 스프링 효과 적용
+            if (isClicking) {
+                var springX = (targetX - centerX) * springFactor * 3;
+                var springY = (targetY - centerY) * springFactor * 3;
+            } else {
+                var springX = (targetX - centerX) * springFactor;
+                var springY = (targetY - centerY) * springFactor;
+                if (tailLength < 3) tailLength = 3; // 최소 길이 유지
+            }
+            dx += springX;
+            dy += springY;
+
+            // 새로운 원의 중심 좌표 계산
+            centerX += dx;
+            centerY += dy;
+
+            // 원을 그립니다.
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = "blue";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "black";
+            ctx.stroke();
+
+            // 뱀의 몸통을 그립니다.
+            tail.push({ x: centerX, y: centerY });
+            while (tail.length > tailLength) {
+                tail.shift();
+            }
+            for (var i = 0; i < tail.length; i++) {
+                var t = tail[i];
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, radius, 0, 2 * Math.PI, false);
+                ctx.fillStyle = "green";
+                ctx.fill();
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = "green";
+                ctx.stroke();
+            }
+
+            // 먹이를 그립니다.
+            ctx.beginPath();
+            ctx.arc(food.x, food.y, radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = food.color;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "black";
+            ctx.stroke(); 
+
+            // 장애물을 그립니다.
+            for (var i = 0; i < obstacles.length; i++) {
+                var o = obstacles[i];
+                ctx.save(); // 현재 상태 저장
+                ctx.translate(o.x, o.y); // 장애물의 중심으로 좌표계 이동
+                ctx.rotate(o.angle); // 회전
+                ctx.fillStyle = o.color;
+                ctx.strokeStyle = "black";
+                ctx.lineWidth = 2;
+                if (o.type === "triangle") {
+                    ctx.beginPath();
+                    ctx.moveTo(-o.size, o.size);
+                    ctx.lineTo(o.size, o.size);
+                    ctx.lineTo(0, -o.size);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (o.type === "rectangle") {
+                    ctx.beginPath();
+                    ctx.rect(-o.size / 2, -o.size / 2, o.size, o.size);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (o.type === "circle") {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, o.size, 0, 2 * Math.PI, false);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                ctx.restore(); // 저장된 상태로 복원
+
+                // 장애물의 위치 업데이트
+                o.x += o.dx;
+                o.y += o.dy;
+                o.angle += o.da;
+
+                // 화면 밖으로 나가면 반대편에서 다시 나타나도록 처리
+                if (o.x > canvas.width) o.x = 0;
+                if (o.x < 0) o.x = canvas.width;
+                if (o.y > canvas.height) o.y = 0;
+                if (o.y < 0) o.y = canvas.height;
+            }
+
+            // 먹이와 충돌 감지
+            if (Math.sqrt((centerX - food.x) ** 2 + (centerY - food.y) ** 2) < radius * 2) {
+                food = createFood();
+                tailLength += 1;
+            }
+
+            // 장애물과 충돌 감지
+            for (var i = 0; i < obstacles.length; i++) {
+                var o = obstacles[i];
+                if (
+                    Math.sqrt((centerX - o.x) ** 2 + (centerY - o.y) ** 2) <
+                    radius + o.size
+                ) {
+                    // 충돌 시 게임 초기화
+                    centerX = canvas.width / 2;
+                    centerY = canvas.height / 2;
+                    tailLength = 3;
+                    tail = [];
+                    food = createFood();
+                    obstacles = [];
+                    for (var j = 0; j < 5; j++) {
+                        obstacles.push(createObstacle());
+                    }
+                    startTime = Date.now();
+                    break;
+                }
+            }
+
+            requestAnimationFrame(draw);
+        }
+        
+        // 마우스 위치 업데이트
+        canvas.addEventListener("mousemove", function (event) {
+            var rect = canvas.getBoundingClientRect();
+            targetX = event.clientX - rect.left;
+            targetY = event.clientY - rect.top;
+        });
+
+        // 마우스 클릭 상태 업데이트
+        canvas.addEventListener("mousedown", function () {
+            isClicking = true;
+        });
+
+        // 마우스 클릭 상태 업데이트
+        canvas.addEventListener("mouseup", function () {
+            isClicking = false;
+        });
+
+        draw();
+    </script>
+</body>
+</html>
